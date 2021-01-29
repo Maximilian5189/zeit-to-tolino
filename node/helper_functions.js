@@ -7,27 +7,24 @@ module.exports.parseCookies = (response, existingCookies) => {
       return cookiePart;
     }).join(';');
   } else {
-    let existingCookiesDeepArray = existingCookies.split(';');
-    existingCookiesDeepArray = existingCookiesDeepArray.map((cookie) => {
-      return cookie.split('=');
-    });
+    let existingCookiesArray = existingCookies.split(';');
     const raw = response.headers.raw()['set-cookie'];
-
     let cookieString = '';
-    existingCookiesDeepArray.forEach((ExistingCookie, index) => {      
+    existingCookiesArray.forEach((existingCookie) => {
+      existingCookie = existingCookie.split('=');  
       let cookiePlacedInJar = false;
       raw.forEach((entry) => {
         const parts = entry.split(';');
         const cookieNew = parts[0];
         const CookieIdentifierNew = cookieNew.split('=');
-        if (CookieIdentifierNew[0] === ExistingCookie[0]) {
+        if (CookieIdentifierNew[0] === existingCookie[0]) {
           cookiePlacedInJar = true;
           cookieString += `${cookieNew};`;
         }
       })
       // existing cookie not replaced by new one, hence add old cookie back again
       if (cookiePlacedInJar === false) {
-        cookieString += `${ExistingCookie[0]}=${ExistingCookie[1]};` 
+        cookieString += `${existingCookie[0]}=${existingCookie[1]};` 
       }
     })
 

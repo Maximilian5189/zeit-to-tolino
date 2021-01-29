@@ -1,23 +1,24 @@
 require('dotenv').config()
-const request = require('request');
 const fs = require('fs');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 const { parseCookies, Date } = require('./helper_functions');
 
+const formZeitLogin = new URLSearchParams();
+formZeitLogin.append('email', process.env.ZEIT_EMAIL);
+formZeitLogin.append('pass', process.env.ZEIT_PW);
+
 const optionsZeitLogin = {
-  'method': 'POST',
-  'url': 'https://meine.zeit.de/anmelden',
-  'headers': {},
-  form: {
-    'email': process.env.ZEIT_EMAIL,
-    'pass': process.env.ZEIT_PW
-  }
+  method: 'POST',
+  headers: {},
+  body: formZeitLogin,
+  redirect: 'manual'
 }
 
 const optionsDownloadEpub = {
   'method': 'GET',
   'headers': {}
+  // redirect: 'manual'
 }
 
 const formTolinoLogin = new URLSearchParams();
@@ -31,51 +32,71 @@ const optionsTolinoLogin = {
   method: 'POST'
 }
 
-const formToken= new URLSearchParams();
-formToken.append('client_id', 'webreader');
-formToken.append('grant_type', 'authorization_code');
-formToken.append('scope', 'SCOPE_BOSH');
-formToken.append('redirect_uri', 'https://webreader.mytolino.com/library/');
-formToken.append('x_buchde.skin_id', '17');
-formToken.append('x_buchde.mandant_id', '2');
+const formRequestTolinoToken= new URLSearchParams();
+formRequestTolinoToken.append('client_id', 'webreader');
+formRequestTolinoToken.append('grant_type', 'authorization_code');
+formRequestTolinoToken.append('scope', 'SCOPE_BOSH');
+formRequestTolinoToken.append('redirect_uri', 'https://webreader.mytolino.com/library/');
+formRequestTolinoToken.append('x_buchde.skin_id', '17');
+formRequestTolinoToken.append('x_buchde.mandant_id', '2');
 
-let fileName;
+const getLastEdition = () => {
+  let lastEdition;
+  try {
+    lastEdition = fs.readFileSync('./state').toString();
+  } catch (e) {
+    // write new state file, if non exists currently
+    const today = new Date();
+    lastEdition = today.getWeek();
+    lastEdition = today.getDay() === 1 || today.getDay() === 2 ? lastEdition - 1 : lastEdition;
+    lastEdition = lastEdition.toString();
+    fs.writeFileSync('./state', lastEdition)
+  }
+  return lastEdition;
+}
 
-const buildLink = (edition) => {
+const buildLinkAndFileName = (edition) => {
   const today = new Date();
   const currentYear = today.getFullYear();
-  let currentWeek = today.getWeek().toString()
+  let currentWeek = today.getWeek();
+  // new edition is released on Wednesday, therefore on Monday and Tuesday the edition of last week has to be fetched
+  currentWeek = today.getDay() === 1 || today.getDay() === 2 ? currentWeek - 1 : currentWeek;
+  currentWeek = currentWeek.toString();
   currentWeek = currentWeek.length === 1 ? `0${currentWeek}` : currentWeek;
 
-  // Careful with side effect!
+  // To-do: better solution without side effect?
   fileName = `die_zeit_${currentYear}_${edition}.epub`
 
   // todo: work on edge case where first version of new year is published in old year
   // e.g. https://premium.zeit.de/system/files/2020-52/epub/die_zeit_2020_54_1.epub
-  return `https://premium.zeit.de/system/files/${currentYear}-${currentWeek}/epub/die_zeit_${currentYear}_${edition}.epub`
+  return {
+    link: `https://premium.zeit.de/system/files/${currentYear}-${currentWeek}/epub/die_zeit_${currentYear}_${edition}.epub`,
+    fileName
+  }
 }
 
-const downloadEpub = (epubUrl) => {
-  // todo: use node-fetch
-  return new Promise (resolve => request(optionsZeitLogin, (error, response) => {
-    if (error) throw new Error(error);
-    optionsDownloadEpub.headers['Cookie'] = response.headers['set-cookie'];
-    optionsDownloadEpub.url = epubUrl;
+const downloadEpub = async (epubUrl, fileName) => {
+  try {
+  const responseZeitLogin = await fetch('https://meine.zeit.de/anmelden', optionsZeitLogin);
 
-    let file = fs.createWriteStream(fileName);
-    request(optionsDownloadEpub, (error, response) => {
-      if (error) throw new Error(error);
-      if (response.body.includes('<!DOCTYPE html>')) resolve('NOT FOUND')
-      })
-      .pipe(file)
-      .on('finish', () => {
-        file.close()
-        resolve('resolved')
-      })
-  }));
+  optionsDownloadEpub.headers.cookie = parseCookies(responseZeitLogin);
+  const responseDownloadEpub = await fetch(epubUrl, optionsDownloadEpub)
+
+  if (responseDownloadEpub.headers.raw()['content-type'][0].includes('text/html')) return 'error';
+  let file = fs.createWriteStream(fileName);
+  responseDownloadEpub.body
+  .pipe(file)
+  .on('finish', () => {
+    file.close()
+    return 'success'
+  })
+  } catch (e) {
+    console.log(e)
+    return 'error'
+  }
 }
 
-const uploadEpub = async () => {
+const uploadEpub = async (fileName) => {
   // GET Login page, obtain OAUTH-JSESSIONID
   const loginFormUrl = 'https://www.thalia.de/auth/oauth2/authorize?client_id=webreader&response_type=code&scope=SCOPE_BOSH&redirect_uri=https://webreader.mytolino.com/library/&x_buchde.skin_id=17&x_buchde.mandant_id=2';
   const responseLoginForm = await fetch(loginFormUrl, { redirect: 'manual' });
@@ -109,11 +130,11 @@ const uploadEpub = async () => {
     }
   });
 
-  formToken.append('code', code);
+  formRequestTolinoToken.append('code', code);
 
   const responseToken = await fetch('https://www.thalia.de/auth/oauth2/token',
   {
-    body: formToken,
+    body: formRequestTolinoToken,
     method: 'POST',
     redirect: 'manual'
   });
@@ -124,7 +145,9 @@ const uploadEpub = async () => {
   formUpload.append('file', fs.createReadStream(fileName));
   const uploadHeaders = formUpload.getHeaders();
   uploadHeaders.t_auth_token = token.access_token;
-  uploadHeaders.hardware_id = '5285356b-a469-4bbc-bb5c-f4ae67f7537b';
+
+  // todo: how can the hardware_id be obtained automatically?
+  uploadHeaders.hardware_id = process.env.HARDWARE_ID;
   uploadHeaders.reseller_id = '3';
 
   const uploadResponse = await fetch('https://bosh.pageplace.de/bosh/rest/upload',
@@ -138,33 +161,42 @@ const uploadEpub = async () => {
 }
 
 const distributeLatestEpub = async () => {
-  const lastEdition = fs.readFileSync('./state').toString();
-  let currentEdition = Number(lastEdition) + 1;
-  let link = buildLink(currentEdition);
+  const lastEdition = getLastEdition();
 
-  let downloadResponse = await downloadEpub(link);
+  let currentEdition = Number(lastEdition) + 1;
+  let { link, fileName } = buildLinkAndFileName(currentEdition);
+
+  let downloadResponse = await downloadEpub(link, fileName);
+  
+  // if currentEdition is < 10, sometimes link is written with leading zero, sometimes without
+  // therefore both scenarios have to be tried
+  currentEdition = currentEdition.toString();
+  if (downloadResponse === 'error' && currentEdition.length === 1) {
+    currentEdition = `0${currentEdition}`;
+    ({ link, fileName } = buildLinkAndFileName(currentEdition));
+    downloadResponse = await downloadEpub(link, fileName);
+
+    // for writing the state file, delete leading zero again
+    if (downloadResponse !== 'error') {
+      currentEdition = currentEdition.replace('0', '')
+    }
+  }
 
   // try again with new year version
-  if (downloadResponse === 'NOT FOUND') {
-    // todo: once downloadEpub uses fetch, can be moved directly to function
-    fs.unlink(fileName, (err) => console.log(err));
-
+  if (downloadResponse === 'error') {
     currentEdition = 1;
-    link = buildLink(currentEdition);
-    downloadResponse = await downloadEpub(link);
+    ({ link, fileName } = buildLinkAndFileName(currentEdition));
+    downloadResponse = await downloadEpub(link, fileName);
   }
 
   // Maybe script called too early, when edition was not published. State will not be changed.
-  if (downloadResponse !== 'resolved') {
-    // todo: once downloadEpub uses fetch, can be moved directly to function
-    fs.unlink(fileName, (err) => console.log(err));
-
+  if (downloadResponse === 'error') {
     throw new Error ('Cannot get epub');
   }
 
   fs.writeFileSync('./state', currentEdition.toString());
 
-  const responseUpload = await uploadEpub();
+  const responseUpload = await uploadEpub(fileName);
 
   if (responseUpload.metadata) {
     fs.unlink(fileName, (err) => {
