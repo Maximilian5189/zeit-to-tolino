@@ -73,25 +73,27 @@ const downloadEpub = async (epubUrl, fileName) => {
   const responseZeitLogin = await fetch('https://meine.zeit.de/anmelden', optionsZeitLogin);
 
   optionsDownloadEpub.headers.cookie = parseCookies(responseZeitLogin);
-  const responseDownloadEpub = await fetch(epubUrl, optionsDownloadEpub)
+  const responseDownloadEpub = await fetch(epubUrl, optionsDownloadEpub);
 
   if (responseDownloadEpub.headers.raw()['content-type'][0].includes('text/html')) return 'error';
   let file = fs.createWriteStream(fileName);
   responseDownloadEpub.body
-  .pipe(file)
-  .on('finish', () => {
-    file.close()
-    return 'success'
-  })
-  } catch (e) {
-    console.log(e)
-    return 'error'
-  }
+    .pipe(file)
+    .on('finish', () => {
+      file.close()
+      return 'success'
+    })
+    } catch (e) {
+      console.log(e)
+      return 'error'
+    }
 }
 
-// const XXXX = async () => {
-
-// }
+const downloadAndFileName = async (currentEdition) => {
+  const { link, fileName } = buildLinkAndFileName(currentEdition);
+  const downloadResponse = await downloadEpub(link, fileName);
+  return { downloadResponse, fileName };
+}
 
 const uploadEpub = async (fileName) => {
   // GET Login page, obtain OAUTH-JSESSIONID
@@ -157,12 +159,6 @@ const uploadEpub = async (fileName) => {
   return await uploadResponse.json();
 }
 
-const downloadAndFileName = async (currentEdition) => {
-  const { link, fileName } = buildLinkAndFileName(currentEdition);
-  const downloadResponse = await downloadEpub(link, fileName);
-  return { downloadResponse, fileName };
-}
-
 const distributeLatestEpub = async () => {
   // todo: allow desired version via stdin 
   const currentEdition = getCurrentEdition();
@@ -184,14 +180,14 @@ const distributeLatestEpub = async () => {
     throw new Error ('Cannot get epub');
   }
 
-  // const responseUpload = await uploadEpub(fileName);
+  const responseUpload = await uploadEpub(fileName);
 
-  // if (responseUpload.metadata) {
-  //   console.log(`success, uploaded: ${fileName}`)
-  //   fs.unlink(fileName, (err) => {
-  //     console.log(err)
-  //   });
-  // }
+  if (responseUpload.metadata) {
+    console.log(`success, uploaded: ${fileName}`)
+    fs.unlink(fileName, (err) => {
+      console.log(err)
+    });
+  }
 }
 
 distributeLatestEpub();
