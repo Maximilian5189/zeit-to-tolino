@@ -18,7 +18,6 @@ const optionsZeitLogin = {
 const optionsDownloadEpub = {
   'method': 'GET',
   'headers': {}
-  // redirect: 'manual'
 }
 
 const formTolinoLogin = new URLSearchParams();
@@ -40,34 +39,26 @@ formRequestTolinoToken.append('redirect_uri', 'https://webreader.mytolino.com/li
 formRequestTolinoToken.append('x_buchde.skin_id', '17');
 formRequestTolinoToken.append('x_buchde.mandant_id', '2');
 
-const getLastEdition = () => {
-  let lastEdition;
-  try {
-    lastEdition = fs.readFileSync('./state').toString();
-  } catch (e) {
-    // write new state file, if non exists currently
-    const today = new Date();
-    lastEdition = today.getWeek();
-    lastEdition = today.getDay() === 1 || today.getDay() === 2 ? lastEdition - 1 : lastEdition;
-    lastEdition = lastEdition.toString();
-    fs.writeFileSync('./state', lastEdition)
-  }
-  return lastEdition;
+const getCurrentEdition = () => {
+  const today = new Date();
+  const currentWeek = today.getWeek();
+  // edition number is one ahead of week number in 2021
+  // todo: implement generic logic to identify gap of week and edition number
+  let currentEdition = today.getDay() === 1 || today.getDay() === 2 ? currentWeek : currentWeek + 1;
+  return currentEdition.toString();
 }
 
-const buildLinkAndFileName = (edition, appendZero) => {
+const buildLinkAndFileName = (edition) => {
   const today = new Date();
   const currentYear = today.getFullYear();
-  let currentWeek = today.getWeek();
+  const currentWeek = today.getWeek();
   // new edition is released on Wednesday, therefore on Monday and Tuesday the edition of last week has to be fetched
-  currentWeek = today.getDay() === 1 || today.getDay() === 2 ? currentWeek - 1 : currentWeek;
-  currentWeek = currentWeek.toString();
-  currentWeek = currentWeek.length === 1 ? `0${currentWeek}` : currentWeek;
+  let weekWithLatestEdition = today.getDay() === 1 || today.getDay() === 2 ? currentWeek - 1 : currentWeek;
+  weekWithLatestEdition = weekWithLatestEdition.toString();
+  weekWithLatestEdition = weekWithLatestEdition.length === 1 ? `0${weekWithLatestEdition}` : weekWithLatestEdition;
 
-  // const fileName = appendZero ? `die_zeit_${currentYear}_${edition}_0.epub` : `die_zeit_${currentYear}_${edition}.epub`;
   const fileName = `die_zeit_${currentYear}_${edition}.epub`;
-  const linkFragment = `https://premium.zeit.de/system/files/${currentYear}-${currentWeek}/epub/die_zeit_${currentYear}_${edition}`
-  const link = appendZero ? `${linkFragment}_0.epub` : `${linkFragment}.epub`
+  const link = `https://premium.zeit.de/system/files/${currentYear}-${weekWithLatestEdition}/epub/die_zeit_${currentYear}_${edition}.epub`
 
   // todo: work on edge case where first version of new year is published in old year
   // e.g. https://premium.zeit.de/system/files/2020-52/epub/die_zeit_2020_54_1.epub
@@ -97,6 +88,10 @@ const downloadEpub = async (epubUrl, fileName) => {
     return 'error'
   }
 }
+
+// const XXXX = async () => {
+
+// }
 
 const uploadEpub = async (fileName) => {
   // GET Login page, obtain OAUTH-JSESSIONID
@@ -162,61 +157,41 @@ const uploadEpub = async (fileName) => {
   return await uploadResponse.json();
 }
 
+const downloadAndFileName = async (currentEdition) => {
+  const { link, fileName } = buildLinkAndFileName(currentEdition);
+  const downloadResponse = await downloadEpub(link, fileName);
+  return { downloadResponse, fileName };
+}
+
 const distributeLatestEpub = async () => {
-  const lastEdition = getLastEdition();
+  // todo: allow desired version via stdin 
+  const currentEdition = getCurrentEdition();
 
-  let currentEdition = Number(lastEdition) + 1;
-  let { link, fileName } = buildLinkAndFileName(currentEdition);
-
-  let downloadResponse = await downloadEpub(link, fileName);
-  
-  // if currentEdition is < 10, sometimes link is written with leading zero, sometimes without
-  // therefore both scenarios have to be tried
-  currentEdition = currentEdition.toString();
-  if (downloadResponse === 'error' && currentEdition.length === 1) {
-    currentEdition = `0${currentEdition}`;
-    ({ link, fileName } = buildLinkAndFileName(currentEdition));
-    downloadResponse = await downloadEpub(link, fileName);
-
-    // sometimes _0 is appended in download link
-    if (downloadResponse === 'error') {
-      ({ link, fileName } = buildLinkAndFileName(currentEdition, true));
-      downloadResponse = await downloadEpub(link, fileName);
-    }
-
-    // for writing the state file, delete leading zero again
-    if (downloadResponse !== 'error') {
-      currentEdition = currentEdition.replace('0', '')
-    }
+  const possibleEditions = [currentEdition, `${currentEdition}_0`, '1'];
+  if (currentEdition.length === 1) {
+    possibleEditions.push(`0${currentEdition}`);
+    possibleEditions.push(`0${currentEdition}_0`);
   }
 
-  // sometimes _0 is appended in download link
-  if (downloadResponse === 'error') {
-    ({ link, fileName } = buildLinkAndFileName(currentEdition, true));
-    downloadResponse = await downloadEpub(link, fileName);
+  let downloadResponse;
+  let fileName;
+  for (const edition of possibleEditions) {
+    ({ downloadResponse, fileName } = await downloadAndFileName(edition));
+    if (downloadResponse !== 'error') break;
   }
 
-  // try again with new year version
-  if (downloadResponse === 'error') {
-    currentEdition = 1;
-    ({ link, fileName } = buildLinkAndFileName(currentEdition));
-    downloadResponse = await downloadEpub(link, fileName);
-  }
-
-  // Maybe script called too early, when edition was not published. State will not be changed.
   if (downloadResponse === 'error') {
     throw new Error ('Cannot get epub');
   }
 
-  fs.writeFileSync('./state', currentEdition.toString());
+  // const responseUpload = await uploadEpub(fileName);
 
-  const responseUpload = await uploadEpub(fileName);
-
-  if (responseUpload.metadata) {
-    fs.unlink(fileName, (err) => {
-      console.log(err)
-    });
-  }
+  // if (responseUpload.metadata) {
+  //   console.log(`success, uploaded: ${fileName}`)
+  //   fs.unlink(fileName, (err) => {
+  //     console.log(err)
+  //   });
+  // }
 }
 
 distributeLatestEpub();
