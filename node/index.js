@@ -55,7 +55,7 @@ const getLastEdition = () => {
   return lastEdition;
 }
 
-const buildLinkAndFileName = (edition) => {
+const buildLinkAndFileName = (edition, appendZero) => {
   const today = new Date();
   const currentYear = today.getFullYear();
   let currentWeek = today.getWeek();
@@ -64,13 +64,15 @@ const buildLinkAndFileName = (edition) => {
   currentWeek = currentWeek.toString();
   currentWeek = currentWeek.length === 1 ? `0${currentWeek}` : currentWeek;
 
-  // To-do: better solution without side effect?
-  fileName = `die_zeit_${currentYear}_${edition}.epub`
+  // const fileName = appendZero ? `die_zeit_${currentYear}_${edition}_0.epub` : `die_zeit_${currentYear}_${edition}.epub`;
+  const fileName = `die_zeit_${currentYear}_${edition}.epub`;
+  const linkFragment = `https://premium.zeit.de/system/files/${currentYear}-${currentWeek}/epub/die_zeit_${currentYear}_${edition}`
+  const link = appendZero ? `${linkFragment}_0.epub` : `${linkFragment}.epub`
 
   // todo: work on edge case where first version of new year is published in old year
   // e.g. https://premium.zeit.de/system/files/2020-52/epub/die_zeit_2020_54_1.epub
   return {
-    link: `https://premium.zeit.de/system/files/${currentYear}-${currentWeek}/epub/die_zeit_${currentYear}_${edition}.epub`,
+    link,
     fileName
   }
 }
@@ -176,10 +178,22 @@ const distributeLatestEpub = async () => {
     ({ link, fileName } = buildLinkAndFileName(currentEdition));
     downloadResponse = await downloadEpub(link, fileName);
 
+    // sometimes _0 is appended in download link
+    if (downloadResponse === 'error') {
+      ({ link, fileName } = buildLinkAndFileName(currentEdition, true));
+      downloadResponse = await downloadEpub(link, fileName);
+    }
+
     // for writing the state file, delete leading zero again
     if (downloadResponse !== 'error') {
       currentEdition = currentEdition.replace('0', '')
     }
+  }
+
+  // sometimes _0 is appended in download link
+  if (downloadResponse === 'error') {
+    ({ link, fileName } = buildLinkAndFileName(currentEdition, true));
+    downloadResponse = await downloadEpub(link, fileName);
   }
 
   // try again with new year version
