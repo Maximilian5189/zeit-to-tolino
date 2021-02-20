@@ -140,6 +140,25 @@ const uploadEpub = async (fileName) => {
 
   const token = await responseToken.json();
 
+  // register combination of hardware_id and token
+  const registerHardwareResponse = await fetch('https://bosh.pageplace.de/bosh/rest/v2/registerhw',
+  {
+    headers: {
+      t_auth_token: token.access_token,
+      hardware_type: 'TOLINO_WEBREADER',
+      hardware_id: process.env.HARDWARE_ID,
+      client_type: 'TOLINO_WEBREADER',
+      reseller_id: '3',
+      client_version: '5.2.4',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      hardware_name: 'tolino Webreader 5.2.4',
+    }), 
+    method: 'POST',
+    redirect: 'manual'
+  });
+
   const formUpload = new FormData();
   formUpload.append('file', fs.createReadStream(fileName));
   const uploadHeaders = formUpload.getHeaders();
