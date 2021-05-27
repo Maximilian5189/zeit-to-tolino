@@ -1,5 +1,5 @@
 # Run app
-```deno run --allow-net --allow-read --allow-write server.ts```
+```deno run --allow-net --allow-read --allow-write --allow-env server.ts```
 
 # Install Deno
 https://deno.land/manual@v1.5.4/getting_started/installation
