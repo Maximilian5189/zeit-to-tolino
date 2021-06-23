@@ -2,6 +2,7 @@ require('dotenv').config()
 const fs = require('fs');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
+const puppeteer = require('puppeteer');
 const { parseCookies, Date } = require('./helper_functions');
 
 const formZeitLogin = new URLSearchParams();
@@ -68,11 +69,30 @@ const buildLinkAndFileName = (edition) => {
   }
 }
 
-const downloadEpub = async (epubUrl, fileName) => {
+const downloadEpub = async () => {
   try {
   const responseZeitLogin = await fetch('https://meine.zeit.de/anmelden', optionsZeitLogin);
 
-  optionsDownloadEpub.headers.cookie = parseCookies(responseZeitLogin);
+  // optionsDownloadEpub.headers.cookie = parseCookies(responseZeitLogin);
+  const cookies = parseCookies(responseZeitLogin);
+
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  await page.setCookie(...cookies);
+  await page.goto('https://epaper.zeit.de/abo/diezeit');
+  await page._client.send('Page.setDownloadBehavior', {behavior: 'allow', downloadPath: './'});
+  await page.click('.btn-md')
+
+  const linkHandlers = await page.$x("//a[contains(text(), 'EPUB FÜR E-READER LADEN')]");
+  if (linkHandlers.length > 0) {
+    await linkHandlers[0].click();
+    await linkHandlers[1].click();
+  }
+
+  await browser.close();
+
+  // if we can download via puppeteer, delete the rest from here
+  let epubUrl = 'XXXXXX'
   const responseDownloadEpub = await fetch(epubUrl, optionsDownloadEpub);
 
   if (responseDownloadEpub.headers.raw()['content-type'][0].includes('text/html')) return 'error';
@@ -89,9 +109,9 @@ const downloadEpub = async (epubUrl, fileName) => {
     }
 }
 
-const downloadAndFileName = async (currentEdition) => {
-  const { link, fileName } = buildLinkAndFileName(currentEdition);
-  const downloadResponse = await downloadEpub(link, fileName);
+const downloadAndFileName = async () => {
+  // const { link, fileName } = buildLinkAndFileName(currentEdition);
+  const downloadResponse = await downloadEpub();
   return { downloadResponse, fileName };
 }
 
@@ -180,26 +200,29 @@ const uploadEpub = async (fileName) => {
 
 const distributeLatestEpub = async () => {
   // todo: allow desired version via stdin 
-  const currentEdition = getCurrentEdition();
+  // const currentEdition = getCurrentEdition();
 
-  const possibleEditions = [currentEdition, `${currentEdition}_0`, '1'];
-  if (currentEdition.length === 1) {
-    possibleEditions.push(`0${currentEdition}`);
-    possibleEditions.push(`0${currentEdition}_0`);
-  }
+  // const possibleEditions = [currentEdition, `${currentEdition}_0`, '1'];
+  // if (currentEdition.length === 1) {
+  //   possibleEditions.push(`0${currentEdition}`);
+  //   possibleEditions.push(`0${currentEdition}_0`);
+  // }
 
-  let downloadResponse;
-  let fileName;
-  for (const edition of possibleEditions) {
-    ({ downloadResponse, fileName } = await downloadAndFileName(edition));
-    if (downloadResponse !== 'error') break;
-  }
+  // let downloadResponse;
+  // let fileName;
+  // for (const edition of possibleEditions) {
+  //   ({ downloadResponse, fileName } = await downloadAndFileName(edition));
+  //   if (downloadResponse !== 'error') break;
+  // }
+
+  const { downloadResponse, fileName } = await downloadAndFileName();
 
   if (downloadResponse === 'error') {
     throw new Error ('Cannot get epub');
   }
 
-  const responseUpload = await uploadEpub(fileName);
+  // todo: comment in when downloading epub is solved 
+  // const responseUpload = await uploadEpub(fileName);
 
   if (responseUpload.metadata) {
     console.log(`success, uploaded: ${fileName}`)

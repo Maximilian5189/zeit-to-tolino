@@ -1,11 +1,20 @@
 module.exports.parseCookies = (response, existingCookies) => {
+  // Case login to Zeit: at this point no cookies exist
   if (!existingCookies) {
     const raw = response.headers.raw()['set-cookie'];
     return raw.map((entry) => {
       const parts = entry.split(';');
-      const cookiePart = parts[0];
-      return cookiePart;
-    }).join(';');
+      const [ name, value ] = parts[0].split('=');
+      return { name, value, url: 'https://epaper.zeit.de' };
+    });
+    // probably delete: this was downloading cookie to use in fetch
+    // return raw.map((entry) => {
+    //   const parts = entry.split(';');
+    //   const cookiePart = parts[0];
+    //   return cookiePart;
+    // }).join(';');
+  
+  // case login to Tolino
   } else {
     let existingCookiesArray = existingCookies.split(';');
     const raw = response.headers.raw()['set-cookie'];
