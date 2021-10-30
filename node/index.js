@@ -48,16 +48,21 @@ const downloadEpub = async () => {
   const element2 = await select(page).getElement('a:contains(E-READER LADEN)');
   await element2.click();
 
-  page.on('response', response => {
-    const contentType = response.headers()['content-type'];
-    if (contentType === 'application/epub+zip') {
-      // handle and rename file name (after making sure it's downloaded)
-      // fs readdir
-      // fs rename
-    }
-});
-
-  await browser.close();
+  return new Promise((resolve, reject) => {
+    page.on('response', async response => {
+      const contentType = response.headers()['content-type'];
+      if (contentType === 'application/epub+zip') {
+        // fs readdir
+        for (const file of fs.readdirSync(downloadPath)) {
+          const oldFilePath = `${downloadPath}${file}`
+          const newFilePath = `${downloadPath}zeit`
+          await fs.promises.rename(oldFilePath, newFilePath)
+        }
+        await browser.close();
+        resolve(downloadPath);
+      }
+  });
+  })
 }
 
 const uploadEpub = async (fileName) => {
