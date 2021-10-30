@@ -8,9 +8,9 @@
     "formdata-node": "^2.4.0",
     "node-fetch": "^2.6.1",
     "puppeteer": "^10.0.0",
+    "puppeteer-select": "^1.0.3",
     "request": "^2.88.2"
   },
-  "devDependencies": {},
   "scripts": {
     "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -3,23 +3,8 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
 const puppeteer = require('puppeteer');
+const select = require ('puppeteer-select');
 const { parseCookies, Date } = require('./helper_functions');
-
-const formZeitLogin = new URLSearchParams();
-formZeitLogin.append('email', process.env.ZEIT_EMAIL);
-formZeitLogin.append('pass', process.env.ZEIT_PW);
-
-const optionsZeitLogin = {
-  method: 'POST',
-  headers: {},
-  body: formZeitLogin,
-  redirect: 'manual'
-}
-
-const optionsDownloadEpub = {
-  'method': 'GET',
-  'headers': {}
-}
 
 const formTolinoLogin = new URLSearchParams();
 formTolinoLogin.append('j_username', process.env.TOLINO_EMAIL);
@@ -40,79 +25,39 @@ formRequestTolinoToken.append('redirect_uri', 'https://webreader.mytolino.com/li
 formRequestTolinoToken.append('x_buchde.skin_id', '17');
 formRequestTolinoToken.append('x_buchde.mandant_id', '2');
 
-const getCurrentEdition = () => {
-  const today = new Date();
-  const currentWeek = today.getWeek();
-  // edition number is one ahead of week number in 2021
-  // todo: implement generic logic to identify gap of week and edition number
-  let currentEdition = today.getDay() === 1 || today.getDay() === 2 ? currentWeek : currentWeek + 1;
-  return currentEdition.toString();
-}
-
-const buildLinkAndFileName = (edition) => {
-  const today = new Date();
-  const currentYear = today.getFullYear();
-  const currentWeek = today.getWeek();
-  // new edition is released on Wednesday, therefore on Monday and Tuesday the edition of last week has to be fetched
-  let weekWithLatestEdition = today.getDay() === 1 || today.getDay() === 2 ? currentWeek - 1 : currentWeek;
-  weekWithLatestEdition = weekWithLatestEdition.toString();
-  weekWithLatestEdition = weekWithLatestEdition.length === 1 ? `0${weekWithLatestEdition}` : weekWithLatestEdition;
-
-  const fileName = `die_zeit_${currentYear}_${edition}.epub`;
-  const link = `https://premium.zeit.de/system/files/${currentYear}-${weekWithLatestEdition}/epub/die_zeit_${currentYear}_${edition}.epub`
-
-  // todo: work on edge case where first version of new year is published in old year
-  // e.g. https://premium.zeit.de/system/files/2020-52/epub/die_zeit_2020_54_1.epub
-  return {
-    link,
-    fileName
-  }
-}
-
 const downloadEpub = async () => {
-  try {
-  const responseZeitLogin = await fetch('https://meine.zeit.de/anmelden', optionsZeitLogin);
-
-  // optionsDownloadEpub.headers.cookie = parseCookies(responseZeitLogin);
-  const cookies = parseCookies(responseZeitLogin);
-
-  const browser = await puppeteer.launch();
+  const browser = await puppeteer.launch( { headless: false});
   const page = await browser.newPage();
-  await page.setCookie(...cookies);
-  await page.goto('https://epaper.zeit.de/abo/diezeit');
-  await page._client.send('Page.setDownloadBehavior', {behavior: 'allow', downloadPath: './'});
-  await page.click('.btn-md')
+  await page.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36');
 
-  const linkHandlers = await page.$x("//a[contains(text(), 'EPUB FÜR E-READER LADEN')]");
-  if (linkHandlers.length > 0) {
-    await linkHandlers[0].click();
-    await linkHandlers[1].click();
-  }
+  await page.goto('https://meine.zeit.de/anmelden');
+  await page.focus('#login_email')
+  await page.keyboard.type(process.env.ZEIT_EMAIL)
+  await page.focus('#login_pass')
+  await page.keyboard.type(process.env.ZEIT_PW)
+  await page.click('input[type="submit"]');
+
+  await page.goto('https://epaper.zeit.de/abo/diezeit');
+  const downloadPath = `${__dirname}/download`
+  await page._client.send('Page.setDownloadBehavior', {behavior: 'allow', downloadPath });
+
+  const element = await select(page).getElement('a:contains(ZUR AKTUELLEN AUSGABE)');
+  await element.click();
+  await page.waitForNavigation();
+
+  const element2 = await select(page).getElement('a:contains(E-READER LADEN)');
+  await element2.click();
+
+  page.on('response', response => {
+    const contentType = response.headers()['content-type'];
+    if (contentType === 'application/epub+zip') {
+      // handle and rename file name (after making sure it's downloaded)
+      // fs readdir
+      // fs rename
+    }
+});
 
   await browser.close();
-
-  // if we can download via puppeteer, delete the rest from here
-  let epubUrl = 'XXXXXX'
-  const responseDownloadEpub = await fetch(epubUrl, optionsDownloadEpub);
-
-  if (responseDownloadEpub.headers.raw()['content-type'][0].includes('text/html')) return 'error';
-  let file = fs.createWriteStream(fileName);
-  responseDownloadEpub.body
-    .pipe(file)
-    .on('finish', () => {
-      file.close()
-      return 'success'
-    })
-    } catch (e) {
-      console.log(e)
-      return 'error'
-    }
-}
-
-const downloadAndFileName = async () => {
-  // const { link, fileName } = buildLinkAndFileName(currentEdition);
-  const downloadResponse = await downloadEpub();
-  return { downloadResponse, fileName };
 }
 
 const uploadEpub = async (fileName) => {
@@ -199,37 +144,17 @@ const uploadEpub = async (fileName) => {
 }
 
 const distributeLatestEpub = async () => {
-  // todo: allow desired version via stdin 
-  // const currentEdition = getCurrentEdition();
-
-  // const possibleEditions = [currentEdition, `${currentEdition}_0`, '1'];
-  // if (currentEdition.length === 1) {
-  //   possibleEditions.push(`0${currentEdition}`);
-  //   possibleEditions.push(`0${currentEdition}_0`);
-  // }
-
-  // let downloadResponse;
-  // let fileName;
-  // for (const edition of possibleEditions) {
-  //   ({ downloadResponse, fileName } = await downloadAndFileName(edition));
-  //   if (downloadResponse !== 'error') break;
-  // }
-
-  const { downloadResponse, fileName } = await downloadAndFileName();
-
-  if (downloadResponse === 'error') {
-    throw new Error ('Cannot get epub');
-  }
+  const fileName = await downloadEpub();
 
   // todo: comment in when downloading epub is solved 
   // const responseUpload = await uploadEpub(fileName);
 
-  if (responseUpload.metadata) {
-    console.log(`success, uploaded: ${fileName}`)
-    fs.unlink(fileName, (err) => {
-      console.log(err)
-    });
-  }
+  // if (responseUpload.metadata) {
+  //   console.log(`success, uploaded: ${fileName}`)
+  //   fs.unlink(fileName, (err) => {
+  //     console.log(err)
+  //   });
+  // }
 }
 
 distributeLatestEpub();
