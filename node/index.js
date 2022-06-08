@@ -1,10 +1,11 @@
-require("dotenv").config();
-const fs = require("fs");
-const fetch = require("node-fetch");
-const FormData = require("form-data");
-const puppeteer = require("puppeteer");
-const path = require("path");
-const { parseCookies, Date } = require("./helper_functions");
+import "dotenv/config";
+import { readdirSync, createReadStream } from "fs";
+import fetch from "node-fetch";
+import FormData from "form-data";
+import puppeteer from "puppeteer";
+import { fileURLToPath } from "url";
+import { extname, dirname } from "path";
+import { parseCookies } from "./helper_functions.js";
 
 const formTolinoLogin = new URLSearchParams();
 formTolinoLogin.append("j_username", process.env.TOLINO_EMAIL);
@@ -28,13 +29,15 @@ formRequestTolinoToken.append(
 formRequestTolinoToken.append("x_buchde.skin_id", "17");
 formRequestTolinoToken.append("x_buchde.mandant_id", "2");
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const downloadPath = `${__dirname}/download`;
 const fileName = "zeit";
 
 const awaitClosingBrowser = async (browser) => {
   let files;
   try {
-    files = fs.readdirSync(downloadPath);
+    files = readdirSync(downloadPath);
   } catch {
     setTimeout(async () => {
       await awaitClosingBrowser(browser);
@@ -43,7 +46,7 @@ const awaitClosingBrowser = async (browser) => {
   }
 
   for (const i in files) {
-    if (path.extname(files[i]) === ".crdownload") {
+    if (extname(files[i]) === ".crdownload") {
       setTimeout(async () => {
         await awaitClosingBrowser(browser);
       }, 500);
@@ -167,7 +170,7 @@ const uploadEpub = async () => {
   });
 
   const formUpload = new FormData();
-  formUpload.append("file", fs.createReadStream(fileName));
+  formUpload.append("file", createReadStream(fileName));
   const uploadHeaders = formUpload.getHeaders();
   uploadHeaders.t_auth_token = token.access_token;
 
