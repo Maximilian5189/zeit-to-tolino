@@ -1,8 +1,11 @@
 # Automatically download Zeit newspaper and then upload to Tolino
+
 ## Node
-Run with `cd node && npm start`  
+
+Run with `cd node && npm start`
 
 Prerequisites:
+
 - Node.js must be installed (https://nodejs.org/en/)
 - You must have a Zeit and a Tolino login. Include these in `node/.env` file as follows:
   ```
@@ -12,6 +15,3 @@ Prerequisites:
   TOLINO_PW=ENTER_YOUR_PASSWORD
   HARDWARE_ID=aec9bdd0-5d1f-40d0-ba7e-78bfb56627b9
   ```
-
-## Deno
-Currently work in progress
