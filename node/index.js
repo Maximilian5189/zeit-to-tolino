@@ -93,21 +93,50 @@ const downloadEpub = async () => {
 };
 
 const uploadEpub = async () => {
-  // GET Login page, obtain OAUTH-JSESSIONID
+  const browser = await puppeteer.launch({ headless: false });
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+  );
+
   const loginFormUrl =
     "https://www.thalia.de/auth/oauth2/authorize?client_id=webreader&response_type=code&scope=SCOPE_BOSH&redirect_uri=https://webreader.mytolino.com/library/&x_buchde.skin_id=17&x_buchde.mandant_id=2";
-  const responseLoginForm = await fetch(loginFormUrl, { redirect: "manual" });
-  const responseLoginFormCookies = parseCookies(responseLoginForm);
+  await page.goto(loginFormUrl);
+  await page.focus("#j_username");
+  await page.keyboard.type(process.env.TOLINO_EMAIL);
+  await page.focus("#j_password");
+  await page.keyboard.type(process.env.TOLINO_PW);
 
-  const urlRedirectLoginForm = responseLoginForm.headers.raw()["location"][0];
-  // content of answer not needed, but url has to be called in order for auth to work
-  await fetch(urlRedirectLoginForm, {
-    headers: { cookie: responseLoginFormCookies, Referer: loginFormUrl },
-  });
+  await Promise.all([
+    page.click('button[type="submit"]'),
+    page.waitForNavigation({ waitUntil: "networkidle2" }),
+  ]);
+
+  await page.waitForSelector("div._1ri68zh", { visible: true, timeout: 0 });
+
+  let elementsCountry = await page.$$("div._1ri68zh");
+  await elementsCountry[0].click();
+
+  // await page.waitForSelector("div._1ri68zh", { visible: true, timeout: 0 });
+
+  // let elementsReseller = await page.$$("div._1ri68zh");
+  // await elementsReseller[2].click();
+
+  console.log("");
+
+  // const urlRedirectLoginForm = responseLoginForm.headers.raw()["location"][0];
+  // // content of answer not needed, but url has to be called in order for auth to work
+  // await fetch(urlRedirectLoginForm, {
+  //   headers: {
+  //     cookie: response.headers.raw()["set-cookie"],
+  //     Referer: loginFormUrl,
+  //   },
+  // });
 
   // actual POST login
   // will return new OAUTH-JSESSIONID and then redirect and then return code, which is needed for final token
-  optionsTolinoLogin.headers.cookie = responseLoginFormCookies;
+  optionsTolinoLogin.headers.cookie =
+    responseLoginForm.headers.raw()["set-cookie"];
   optionsTolinoLogin.redirect = "manual";
   const responseLogin = await fetch(
     "https://www.thalia.de/de.thalia.ecp.authservice.application/login.do",
@@ -193,7 +222,7 @@ const uploadEpub = async () => {
 const distributeLatestEpub = async () => {
   await downloadEpub();
 
-  // const responseUpload = await uploadEpub();
+  const responseUpload = await uploadEpub();
 
   // if (responseUpload.metadata) {
   //   console.log(`success, uploaded: ${fileName}`)
