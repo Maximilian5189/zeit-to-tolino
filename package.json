@@ -4,11 +4,12 @@
   "description": "Script to download Zeit newspaper and upload to Tolino",
   "main": "index.js",
   "dependencies": {
+    "delay": "^5.0.0",
     "dotenv": "^8.2.0",
     "formdata-node": "^2.4.0",
     "node-fetch": "^2.6.1",
     "path": "^0.12.7",
-    "puppeteer": "^14.2.0",
+    "puppeteer": "^15.3.2",
     "puppeteer-select": "^1.0.3",
     "request": "^2.88.2"
   },
