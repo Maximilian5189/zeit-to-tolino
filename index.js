@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { readdirSync } from "fs";
+import { readdirSync, rmSync } from "fs";
 import puppeteer from "puppeteer";
 import { fileURLToPath } from "url";
 import { extname, dirname } from "path";
@@ -11,10 +11,9 @@ const downloadPath = `${__dirname}/download`;
 let fileName;
 
 const awaitClosingBrowser = async (browser) => {
-  let files;
-  try {
-    files = readdirSync(downloadPath);
-  } catch {
+  const files = readdirSync(downloadPath);
+
+  if (files.length === 0) {
     setTimeout(async () => {
       await awaitClosingBrowser(browser);
     }, 500);
@@ -32,6 +31,15 @@ const awaitClosingBrowser = async (browser) => {
     }
   }
   await browser.close();
+};
+
+const waitForElementAndClick = async (page, selector, index) => {
+  await page.waitForSelector(selector, {
+    visible: true,
+    timeout: 0,
+  });
+  let elements = await page.$$(selector);
+  await elements[index].click();
 };
 
 const downloadEpub = async () => {
@@ -88,41 +96,27 @@ const uploadEpub = async () => {
   await page.waitForSelector("div._1ri68zh", { visible: true, timeout: 0 });
 
   // fixme
+  // "div._1ri68zh" is an ambiguous selector and sometimes a different div gets rendered immediately before the div we need
+  // that is why we wait here
   await delay(500);
 
   let elementsCountry = await page.$$("div._1ri68zh");
   await elementsCountry[0].click();
 
-  await page.waitForSelector("._fcef1e", {
-    visible: true,
-    timeout: 0,
-  });
+  await waitForElementAndClick(page, "._fcef1e", 2);
 
-  let elementsReseller = await page.$$("._fcef1e");
-  await elementsReseller[2].click();
-
-  await page.waitForSelector("._24nnq9._4df06s._fvmczj._6qmloc._8ag69r", {
-    visible: true,
-    timeout: 0,
-  });
-
-  const openLibraryButton = await page.$$(
-    "._24nnq9._4df06s._fvmczj._6qmloc._8ag69r"
+  await waitForElementAndClick(
+    page,
+    "._24nnq9._4df06s._fvmczj._6qmloc._8ag69r",
+    0
   );
-  await openLibraryButton[0].click();
 
   const toLibraryButton = await page.$$("._1ot1t5f");
   await toLibraryButton[4].click();
 
-  await page.waitForSelector("._y4tlgh", {
-    visible: true,
-    timeout: 0,
-  });
-  const contextMenu = await page.$$("._y4tlgh");
-  await contextMenu[1].click();
+  await waitForElementAndClick(page, "._y4tlgh", 1);
 
   const uploadButton = await page.$$("._z1ovxu");
-
   const [fileInput] = await Promise.all([
     page.waitForFileChooser(),
     uploadButton[2].click("#file-input"),
@@ -130,12 +124,24 @@ const uploadEpub = async () => {
   await fileInput.accept([`${downloadPath}/${fileName}`]);
 
   // fixme
+  // page has custom upload functionality which makes it hard to track upload progress,
+  // therefore workaround for the moment is a long waiting period
   await delay(30000);
 
   await awaitClosingBrowser(browser);
 };
 
 (async () => {
-  await downloadEpub();
-  await uploadEpub();
+  // catch errors because we want to delete created files in any case
+  try {
+    await downloadEpub();
+    await uploadEpub();
+  } catch (e) {
+    console.log(e);
+  }
+
+  const files = readdirSync(downloadPath);
+  files.forEach((file) => {
+    rmSync(`${downloadPath}/${file}`, { force: true });
+  });
 })();
