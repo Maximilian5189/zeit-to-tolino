@@ -1,7 +1,9 @@
 .env
 node_modules
-package-lock.json
 .DS_Store
 state
 .vscode
 *download
+
+# puppeteer installs different dependencies for ARM64, therefore exclude package-lock so that script still works in different environments
+package-lock.json
