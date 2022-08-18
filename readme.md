@@ -12,9 +12,16 @@
 
 - Node.js must be installed (https://nodejs.org/en/)
 - You must have a Zeit and a Tolino login. Include these in `.env` file as follows:
+
   ```
   ZEIT_EMAIL=ENTER_YOUR_EMAIL
   ZEIT_PW=ENTER_YOUR_PASSWORD
   TOLINO_EMAIL=ENTER_YOUR_EMAIL
   TOLINO_PW=ENTER_YOUR_PASSWORD
+  ```
+
+- If you are running the server, you need to create credentials for the route:
+  ```
+  USERNAME
+  PASSWORD
   ```

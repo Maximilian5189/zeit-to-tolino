@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { readdirSync, rmSync, mkdirSync, existsSync } from "fs";
 import puppeteer from "puppeteer";
 import { fileURLToPath } from "url";
