@@ -1,9 +1,10 @@
 import "dotenv/config";
-import { readdirSync, rmSync } from "fs";
+import { readdirSync, rmSync, mkdirSync, existsSync } from "fs";
 import puppeteer from "puppeteer";
 import { fileURLToPath } from "url";
 import { extname, dirname } from "path";
 import delay from "delay";
+import { PendingXHR }  from "pending-xhr-puppeteer";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -80,6 +81,8 @@ const uploadEpub = async () => {
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
   );
 
+  const pendingXHR = new PendingXHR(page);
+
   const loginFormUrl =
     "https://www.thalia.de/auth/oauth2/authorize?client_id=webreader&response_type=code&scope=SCOPE_BOSH&redirect_uri=https://webreader.mytolino.com/library/&x_buchde.skin_id=17&x_buchde.mandant_id=2";
   await page.goto(loginFormUrl);
@@ -123,15 +126,18 @@ const uploadEpub = async () => {
   ]);
   await fileInput.accept([`${downloadPath}/${fileName}`]);
 
-  // fixme
-  // page has custom upload functionality which makes it hard to track upload progress,
-  // therefore workaround for the moment is a long waiting period
-  await delay(30000);
+  await pendingXHR.waitForAllXhrFinished();
 
   await awaitClosingBrowser(browser);
 };
 
-(async () => {
+export const run = async () => {
+  console.log("running script")
+
+  if (!existsSync(downloadPath)){
+    mkdirSync(downloadPath);
+  }
+
   // catch errors because we want to delete created files in any case
   try {
     await downloadEpub();
@@ -144,4 +150,4 @@ const uploadEpub = async () => {
   files.forEach((file) => {
     rmSync(`${downloadPath}/${file}`, { force: true });
   });
-})();
+}
