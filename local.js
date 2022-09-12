@@ -1,3 +1,4 @@
-import { run } from './src/script.js';
+import "dotenv/config";
+import { run } from "./src/script.js";
 
 run();
