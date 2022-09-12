@@ -3,7 +3,7 @@ import puppeteer from "puppeteer";
 import { fileURLToPath } from "url";
 import { extname, dirname } from "path";
 import delay from "delay";
-import { PendingXHR }  from "pending-xhr-puppeteer";
+import { PendingXHR } from "pending-xhr-puppeteer";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -49,17 +49,13 @@ const downloadEpub = async () => {
     behavior: "allow",
     downloadPath,
   });
-
   await page.goto("https://meine.zeit.de/anmelden");
   await page.focus("#login_email");
   await page.keyboard.type(process.env.ZEIT_EMAIL);
   await page.focus("#login_pass");
   await page.keyboard.type(process.env.ZEIT_PW);
 
-  await Promise.all([
-    page.click('input[type="submit"]'),
-    page.waitForNavigation({ waitUntil: "networkidle2" }),
-  ]);
+  await Promise.all([page.click('input[type="submit"]'), page.waitForNavigation({ waitUntil: "networkidle2" })]);
 
   await page.goto("https://epaper.zeit.de/abo/diezeit");
 
@@ -76,9 +72,7 @@ const downloadEpub = async () => {
 const uploadEpub = async () => {
   const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
-  await page.setUserAgent(
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
-  );
+  await page.setUserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36");
 
   const pendingXHR = new PendingXHR(page);
 
@@ -90,10 +84,7 @@ const uploadEpub = async () => {
   await page.focus("#j_password");
   await page.keyboard.type(process.env.TOLINO_PW);
 
-  await Promise.all([
-    page.click('button[type="submit"]'),
-    page.waitForNavigation({ waitUntil: "networkidle2" }),
-  ]);
+  await Promise.all([page.click('button[type="submit"]'), page.waitForNavigation({ waitUntil: "networkidle2" })]);
 
   await page.waitForSelector("div._1ri68zh", { visible: true, timeout: 0 });
 
@@ -107,11 +98,7 @@ const uploadEpub = async () => {
 
   await waitForElementAndClick(page, "._fcef1e", 2);
 
-  await waitForElementAndClick(
-    page,
-    "._24nnq9._4df06s._fvmczj._6qmloc._8ag69r",
-    0
-  );
+  await waitForElementAndClick(page, "._24nnq9._4df06s._fvmczj._6qmloc._8ag69r", 0);
 
   const toLibraryButton = await page.$$("._1ot1t5f");
   await toLibraryButton[4].click();
@@ -119,10 +106,7 @@ const uploadEpub = async () => {
   await waitForElementAndClick(page, "._y4tlgh", 1);
 
   const uploadButton = await page.$$("._z1ovxu");
-  const [fileInput] = await Promise.all([
-    page.waitForFileChooser(),
-    uploadButton[2].click("#file-input"),
-  ]);
+  const [fileInput] = await Promise.all([page.waitForFileChooser(), uploadButton[2].click("#file-input")]);
   await fileInput.accept([`${downloadPath}/${fileName}`]);
 
   await pendingXHR.waitForAllXhrFinished();
@@ -131,9 +115,9 @@ const uploadEpub = async () => {
 };
 
 export const run = async () => {
-  console.log("running script")
+  console.log("running script");
 
-  if (!existsSync(downloadPath)){
+  if (!existsSync(downloadPath)) {
     mkdirSync(downloadPath);
   }
 
@@ -149,4 +133,4 @@ export const run = async () => {
   files.forEach((file) => {
     rmSync(`${downloadPath}/${file}`, { force: true });
   });
-}
+};
